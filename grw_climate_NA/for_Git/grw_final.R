@@ -17,7 +17,7 @@ grow1 <- read.csv(file="master6-15_grw_climNA.csv", sep=",",head=TRUE, na.string
 #OMIT NAs
 grw <- na.omit(grow1)
 
-#DISTRIBUTION
+#DATA DISTRIBUTION
 hist(grw$grwvol_m,breaks = 200)
 skewness(grw$grwvol_m)
 
@@ -36,7 +36,7 @@ rr <- ggplot(grw, aes(ssp,grwvol_m))
 rr+geom_boxplot()+ facet_grid(.~garden)+ylim(-0.5,10)+xlab("subspecies")+ylab("growth")+
   theme_linedraw()
 
-#Barplot (Fig.1)
+#Barplot (Fig.2)
 ss <- ggplot(exp_sum3, aes(x=ssp,y=grwvol_m.mean,fill=factor(year, levels=c("y12","y11" ))))
 ss + geom_bar(stat = "summary", fun.y = "mean")+facet_grid(.~garden)+ xlab("subspecies")+
   ylab(bquote('growth'~(m^3)))+theme_bw(base_size = 15)+guides(fill=guide_legend(title=NULL))
@@ -58,25 +58,35 @@ data_pop=with(popgrw, data.frame(MAT,MWMT,MCMT,TD,MAP,MSP,AHM,SHM,DD0,DD5,DDL18,
 cor <- cor(data_pop)
 
 #=================================================================================================#
-#GLMM
+#GLMM type = ploidy x species combinations
 mgrw1 <- glmmTMB(
-  grwvol_m ~ ssp + MCMT + PPT_sm + (1 | garden:year) + (1|pop:(garden:year)), 
+  grwvol_m ~ type + MCMT + PPT_sm + (1 | garden:year) + (1|pop:(garden:year)), 
   ziformula = ~1, 
   family = tweedie(), 
   data = grw)
 mgrw2 <- glmmTMB(
-  grwvol_m ~ ssp + PAS + (1 | garden:year) + (1|pop:(garden:year)), 
+  grwvol_m ~ type + PAS + (1 | garden:year) + (1|pop:(garden:year)), 
   ziformula = ~1, 
   family = tweedie(), 
   data = grw)
 mgrw3 <- glmmTMB(
-  grwvol_m ~ ssp + (1 | garden:year) + (1|pop:(garden:year)), 
+  grwvol_m ~ type + (1 | garden:year) + (1|pop:(garden:year)), 
   ziformula = ~1, 
   family = tweedie(), 
   data = grw)
 
 #LRT for two models
 anova(mgrw1,mgrw2,mgrw3)
+
+#Is subspecies important? Ploidy-only model
+mgrw2.1 <- glmmTMB(
+  grwvol_m ~ ploidy + PAS + (1 | garden:year) + (1|pop:(garden:year)), 
+  ziformula = ~1, 
+  family = tweedie(), 
+  data = grw)
+
+anova(mgrw2,mgrw2.1)
+#Yes, subspecies is important for growth with lower AIC
 
 #BEST MODEL = mgrw2
 #MODEL RESULTS
@@ -92,10 +102,13 @@ hist(residuals)
 plot(residuals)
 testUniformity(mgrw2)
 
-
+#FIXED EFFECTS (SJPLOT)
+plot_model(mgrw2,show.intercept=TRUE,title = "")
 #GARDEN AND YEAR EFFECTS (SJPLOT)
-#FigS1
-plot_model(mgrw2,type="re")
+#FigS1 Random effects
+plot_model(mgrw2,type="re",title = "")
+
+
 
 ##MAKE DATAFRAME
 grw2_output <- augment(mgrw2)
@@ -119,7 +132,7 @@ setnames(grw2_summary, old = c('grwvol_m.mean','.fitted.mean','PAS.mean'),
 
 
 ###SEED-GROWTH COMPARISON
-##Fig.3 (observed grw vs observed seed yield)
+##Fig.4 (observed grw vs observed seed yield)
 comp <- read.csv(file="comp.csv", sep=",", head=TRUE)
 ll<-ggplot(comp,aes(x=grwvol_m,y=weight))+geom_point(aes(shape = ssp),size = 2)+
   stat_smooth(method=lm,se=FALSE,linetype=4,color="gray")+theme_bw()+
@@ -153,7 +166,7 @@ re1 <- ranef(mgrw2)
 popXgard <- (re1$cond$'pop:(garden:year)')
 
 ###EXAMINE GXE
-#GROWTH (Fig.2a)
+#GROWTH (Fig.3a)
 mm <- ggplot(exp_sum1, aes(y=grwvol_m.mean,x=garden,group=pop))
 mm + geom_point()+ geom_line(alpha=0.4)+facet_grid(.~ssp) + 
   ylab(bquote('growth'~(m^3^-y))) + theme_bw(base_size = 15)#+geom_text(aes(label=pop))
